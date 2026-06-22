@@ -5,11 +5,14 @@ services:
       NODE_ENV: production
       PORT: 4000
       CORS_ORIGIN: http://localhost:8080
-      # Supabase Auth + Postgres — provide via a .env file or your shell.
+      # Values come from the gitignored .env next to this file (docker compose auto-loads it).
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_JWKS_URL: ${SUPABASE_JWKS_URL}
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
       DATABASE_URL: ${DATABASE_URL}
+      # Gemini AI threat analysis
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
     ports:
       - '4000:4000'
     restart: unless-stopped
