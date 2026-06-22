@@ -1,0 +1,110 @@
+// Prisma schema — AI Security Intelligence Platform
+// Default datasource is SQLite for zero-config local dev.
+// To use PostgreSQL: set provider = "postgresql" and DATABASE_URL accordingly.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  fullName      String
+  company       String?
+  role          String         @default("user") // "user" | "admin"
+  emailVerified Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  scans         Scan[]
+  imageScans    ImageScan[]
+  videoScans    VideoScan[]
+  reports       Report[]
+  auditLogs     AuditLog[]
+  subscription  Subscription?
+}
+
+model Scan {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  target      String   // normalized hostname / URL
+  ipAddress   String?
+  riskScore   Int      @default(0) // 0-100
+  riskLevel   String   @default("Unknown") // Safe | Moderate | High Risk
+  status      String   @default("completed") // pending | completed | failed
+  resultJson  String   // full structured ScanResult (stringified JSON)
+  durationMs  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  reports     Report[]
+
+  @@index([userId, createdAt])
+}
+
+model ImageScan {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName    String
+  prediction  String   @default("unknown") // ai | human
+  confidence  Float    @default(0)
+  resultJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model VideoScan {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName    String
+  prediction  String   @default("unknown") // ai | real
+  confidence  Float    @default(0)
+  resultJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Report {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scanId    String?
+  scan      Scan?    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  type      String   @default("website") // website | image | video
+  format    String   @default("pdf") // pdf | json
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan      String   @default("free") // free | pro | enterprise
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  ip        String?
+  meta      String?  // stringified JSON
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

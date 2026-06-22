@@ -1,0 +1,42 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      CORS_ORIGIN: http://localhost:8080
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRES_IN: 7d
+      # SQLite by default. To use the bundled Postgres, switch DATABASE_URL to:
+      # postgresql://secureweb:secureweb@db:5432/secureweb?schema=public
+      DATABASE_URL: file:./dev.db
+    volumes:
+      - backend-data:/app/prisma
+    ports:
+      - '4000:4000'
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - '8080:80'
+    restart: unless-stopped
+
+  # Optional PostgreSQL — enable by setting the backend DATABASE_URL above.
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: secureweb
+      POSTGRES_PASSWORD: secureweb
+      POSTGRES_DB: secureweb
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    profiles: ['postgres']
+
+volumes:
+  backend-data:
+  db-data:
