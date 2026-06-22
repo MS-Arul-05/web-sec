@@ -14,8 +14,14 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(TOKEN_KEY),
 };
 
+// In dev, Vite proxies /api -> backend (:4000). In production on Vercel, the
+// backend service is mounted under /_/backend (see root vercel.json), so API
+// calls go to /_/backend/api. Override with VITE_API_URL if needed.
+const API_BASE =
+  import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '/_/backend/api' : '/api');
+
 export const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
 });
 
