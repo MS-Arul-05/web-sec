@@ -1,0 +1,10 @@
+# Keep the root Docker build context small (used by the root Dockerfile = backend).
+**/node_modules
+**/dist
+.git
+frontend
+*.md
+backend/.env
+.env
+*.db
+*.db-journal
