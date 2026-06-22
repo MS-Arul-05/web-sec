@@ -10,6 +10,8 @@ function required(name: string, fallback?: string): string {
   return value;
 }
 
+const supabaseUrl = required('SUPABASE_URL', 'https://example.supabase.co').replace(/\/$/, '');
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   isProd: process.env.NODE_ENV === 'production',
@@ -18,9 +20,11 @@ export const env = {
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean),
-  jwtSecret: required('JWT_SECRET', 'dev-insecure-secret-change-me'),
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
-  bcryptRounds: Number(process.env.BCRYPT_ROUNDS ?? 10),
+  // Supabase Auth
+  supabaseUrl,
+  supabaseIssuer: `${supabaseUrl}/auth/v1`,
+  supabaseJwksUrl: process.env.SUPABASE_JWKS_URL ?? `${supabaseUrl}/auth/v1/.well-known/jwks.json`,
+  supabaseSecretKey: process.env.SUPABASE_SECRET_KEY ?? '',
   scanTimeoutMs: Number(process.env.SCAN_TIMEOUT_MS ?? 8000),
   googleSafeBrowsingKey: process.env.GOOGLE_SAFE_BROWSING_KEY ?? '',
 };

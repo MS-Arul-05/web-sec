@@ -36,8 +36,9 @@ secure-web-1-/
 | Layer     | Tech |
 |-----------|------|
 | Frontend  | React 19, Vite, TypeScript, Tailwind CSS, Framer Motion, Chart.js, Axios, React Router |
-| Backend   | Node.js, Express, TypeScript, Prisma, JWT, bcryptjs, Zod, Helmet, express-rate-limit |
-| Database  | SQLite (default) → PostgreSQL (one-line switch) |
+| Backend   | Node.js, Express, TypeScript, Prisma, Zod, Helmet, express-rate-limit |
+| Auth      | Supabase Auth (email/password + Google/GitHub OAuth); backend verifies JWTs via Supabase JWKS (`jose`) |
+| Database  | Supabase PostgreSQL (via Prisma) |
 | Security  | Real DNS / WHOIS / TLS / port / HTTP-header analysis + weighted risk scoring |
 | Reports   | pdfkit (PDF), JSON export |
 | AI (next) | Python (FastAPI) microservice — ResNet/EfficientNet/CLIP (image), Xception/LSTM (video) |
@@ -48,25 +49,29 @@ secure-web-1-/
 
 **Prerequisites:** Node.js 20+ (22 recommended).
 
+### 0. Supabase setup (one time)
+1. In your Supabase project → **Project Settings → API**, copy the **Project URL** and **publishable key**.
+2. **Project Settings → Database → Connection string (URI)** — copy the pooled connection string (port `6543`) and your DB password.
+3. (Optional) **Authentication → Providers** — enable Google / GitHub for social login.
+
 ### 1. Backend
 ```bash
 cd backend
-cp .env.example .env          # then edit JWT_SECRET
-npm install
-npx prisma generate
-npx prisma db push            # creates the SQLite DB
-npm run db:seed               # optional: creates admin@secure-web.app / Admin@12345
+cp .env.example .env          # fill SUPABASE_URL, SUPABASE_JWKS_URL, SUPABASE_SECRET_KEY, DATABASE_URL
+npm install                   # runs prisma generate
+npx prisma db push            # creates the app tables in Supabase Postgres
 npm run dev                   # http://localhost:4000
 ```
 
 ### 2. Frontend
 ```bash
 cd frontend
+cp .env.example .env          # fill VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY
 npm install
 npm run dev                   # http://localhost:3000  (proxies /api → :4000)
 ```
 
-Open **http://localhost:3000**, create an account, and scan a site (e.g. `https://github.com`).
+Open **http://localhost:3000**, sign up (Supabase Auth), and scan a site (e.g. `https://github.com`).
 
 ---
 
@@ -76,9 +81,7 @@ Open **http://localhost:3000**, create an account, and scan a site (e.g. `https:
 |--------|----------|------|-------------|
 | GET    | `/api/health` | — | Health check |
 | GET    | `/api/stats` | — | Public platform counters |
-| POST   | `/api/auth/register` | — | Register (returns JWT) |
-| POST   | `/api/auth/login` | — | Login (returns JWT) |
-| GET    | `/api/auth/me` | ✅ | Current user |
+| GET/POST | `/api/auth/me` | ✅ | Sync + return the local profile for the Supabase user |
 | POST   | `/api/scans` | ✅ | Run a website scan |
 | GET    | `/api/scans` | ✅ | Scan history (summaries) |
 | GET    | `/api/scans/:id` | ✅ | Full scan result |
@@ -104,39 +107,49 @@ Clamped to 0–100 → **Safe (80–100)** · **Moderate (50–79)** · **High R
 
 ---
 
-## 🗄️ Database
+## 🔑 Auth (Supabase)
 
-Default is **SQLite** (zero config). To switch to **PostgreSQL**:
+Registration and login happen **client-side** via `@supabase/supabase-js` (email/password + Google/GitHub OAuth). The frontend sends the Supabase access token as `Authorization: Bearer <token>`; the Express backend verifies it against the project **JWKS** (`jose`, asymmetric) — no shared secret needed. On the first authenticated request a local `User` row is created (`id` = Supabase `sub`) so scans/reports have a valid foreign key.
 
-1. In `backend/prisma/schema.prisma`, set `datasource db { provider = "postgresql" }`.
-2. Set `DATABASE_URL="postgresql://user:pass@host:5432/db?schema=public"` in `.env`.
-3. `npx prisma db push`.
+## 🗄️ Database (Supabase Postgres)
 
-Tables: `User`, `Scan`, `ImageScan`, `VideoScan`, `Report`, `Subscription`, `AuditLog`.
+Prisma points at your Supabase Postgres via `DATABASE_URL`. Create the app tables with:
+```bash
+cd backend && npx prisma db push
+```
+Tables: `User`, `Scan`, `ImageScan`, `VideoScan`, `Report`, `Subscription`, `AuditLog`. (Supabase Auth manages its own `auth.users`; our `public.User` mirrors it by id.)
 
 ---
 
 ## 🐳 Deployment
 
+All deploys need the Supabase env vars. **Never expose `SUPABASE_SECRET_KEY` to the frontend** — backend only.
+
 ### Docker (full stack)
 ```bash
-JWT_SECRET=$(openssl rand -hex 32) docker compose up --build
+export SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+export SUPABASE_JWKS_URL=$SUPABASE_URL/auth/v1/.well-known/jwks.json
+export SUPABASE_SECRET_KEY=sb_secret_xxx
+export SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx
+export DATABASE_URL="postgresql://postgres.PROJECT:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?pgbouncer=true"
+docker compose up --build
 # frontend → http://localhost:8080   backend → http://localhost:4000
 ```
-Enable the bundled Postgres with `docker compose --profile postgres up` (and point the backend `DATABASE_URL` at `db`, switching the Prisma provider to `postgresql`).
 
-### Render (API + managed Postgres)
-Push to GitHub and create a **Blueprint** from `render.yaml`. It provisions the API and a free Postgres DB and wires `DATABASE_URL` automatically. Switch the Prisma provider to `postgresql` first. Set `CORS_ORIGIN` to your frontend URL.
+### Render (API)
+Create a **Blueprint** from `render.yaml`, then set `SUPABASE_URL`, `SUPABASE_JWKS_URL`, `SUPABASE_SECRET_KEY`, `DATABASE_URL`, and `CORS_ORIGIN` in the dashboard.
 
-### Vercel (frontend)
-Import the `frontend/` directory. `vercel.json` handles the SPA fallback and proxies `/api/*` to your backend — update the destination URL to your deployed API.
+### Vercel (frontend + backend via `experimentalServices`)
+`vercel.json` deploys both services. Set env vars in the Vercel dashboard:
+- **Backend:** `SUPABASE_URL`, `SUPABASE_JWKS_URL`, `SUPABASE_SECRET_KEY`, `DATABASE_URL`
+- **Frontend:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
 
 ---
 
 ## 🔐 Security features
 
-JWT auth · bcrypt password hashing · Zod input validation · Helmet headers · CORS allow-list · global + per-route rate limiting · SSRF guard (blocks private/local scan targets) · Prisma parameterized queries (SQL-injection safe) · audit logging.
+Supabase Auth (managed sessions, hashed passwords, OAuth) · backend JWT verification via JWKS (`jose`) · Zod input validation · Helmet headers · CORS allow-list · global + per-route rate limiting · SSRF guard (blocks private/local scan targets) · Prisma parameterized queries (SQL-injection safe) · audit logging. Secret key stays server-side only.
 
 ## 🗺️ Roadmap (next milestones)
 - **AI microservice** (FastAPI + PyTorch): image AI/deepfake detection (ResNet/EfficientNet/CLIP), video deepfake detection (Xception/LSTM) with heatmap & timeline UI.
-- OAuth (Google/GitHub) callbacks · email verification & password reset · admin dashboard · subscription billing · API keys.
+- Supabase Row-Level Security policies · admin dashboard · subscription billing · API keys.

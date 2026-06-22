@@ -9,7 +9,8 @@ function userId(req: Request): string {
 }
 
 export async function create(req: Request, res: Response): Promise<void> {
-  const scan = await scansService.createScan(userId(req), req.body.url);
+  if (!req.user) throw AppError.unauthorized();
+  const scan = await scansService.createScan(req.user, req.body.url);
   res.status(201).json({ scan });
 }
 

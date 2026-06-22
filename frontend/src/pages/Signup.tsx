@@ -30,6 +30,7 @@ export default function Signup() {
   const [confirm, setConfirm] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
 
   const strength = useMemo(() => passwordStrength(password), [password]);
@@ -43,7 +44,16 @@ export default function Signup() {
 
     setLoading(true);
     try {
-      await register({ fullName, email, password, company: company || undefined });
+      const { needsEmailConfirmation } = await register({
+        fullName,
+        email,
+        password,
+        company: company || undefined,
+      });
+      if (needsEmailConfirmation) {
+        setNotice(`Almost there! Check ${email} to confirm your account, then sign in.`);
+        return;
+      }
       navigate('/app/scanner', { replace: true });
     } catch (err) {
       setError(apiErrorMessage(err));
@@ -104,6 +114,9 @@ export default function Signup() {
 
           {error && (
             <p className="rounded-lg bg-risk-high/10 px-3 py-2 text-sm text-risk-high" role="alert">{error}</p>
+          )}
+          {notice && (
+            <p className="rounded-lg bg-risk-safe/10 px-3 py-2 text-sm text-risk-safe" role="status">{notice}</p>
           )}
 
           <button type="submit" disabled={loading} className="btn-primary w-full">

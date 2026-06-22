@@ -1,49 +1,80 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { authApi, tokenStore } from '@/lib/api';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
+import { profileApi } from '@/lib/api';
 import type { User } from '@/types';
+
+interface RegisterInput {
+  fullName: string;
+  email: string;
+  password: string;
+  company?: string;
+}
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
-  register: (data: { fullName: string; email: string; password: string; company?: string }) => Promise<void>;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: RegisterInput) => Promise<{ needsEmailConfirmation: boolean }>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+/** Maps a Supabase auth user to our app's User shape. */
+function mapUser(u: SupabaseUser): User {
+  const meta = u.user_metadata ?? {};
+  const appMeta = u.app_metadata ?? {};
+  return {
+    id: u.id,
+    email: u.email ?? '',
+    fullName: (meta.full_name as string) ?? (meta.name as string) ?? '',
+    company: (meta.company as string) ?? null,
+    role: (appMeta.role as string) ?? 'user',
+    emailVerified: Boolean(u.email_confirmed_at),
+    createdAt: u.created_at ?? new Date().toISOString(),
+  };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // On mount, restore session from a stored token.
   useEffect(() => {
-    const token = tokenStore.get();
-    if (!token) {
+    // Restore any existing session, then subscribe to auth changes.
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ? mapUser(data.session.user) : null);
       setLoading(false);
-      return;
-    }
-    authApi
-      .me()
-      .then(setUser)
-      .catch(() => tokenStore.clear())
-      .finally(() => setLoading(false));
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ? mapUser(session.user) : null);
+    });
+    return () => sub.subscription.unsubscribe();
   }, []);
 
-  const login: AuthContextValue['login'] = async (email, password, rememberMe) => {
-    const { user, token } = await authApi.login({ email, password, rememberMe });
-    tokenStore.set(token);
-    setUser(user);
+  const login: AuthContextValue['login'] = async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+    // Ensure a local DB profile row exists (best-effort).
+    profileApi.sync().catch(() => undefined);
   };
 
-  const register: AuthContextValue['register'] = async (data) => {
-    const { user, token } = await authApi.register(data);
-    tokenStore.set(token);
-    setUser(user);
+  const register: AuthContextValue['register'] = async ({ fullName, email, password, company }) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName, company } },
+    });
+    if (error) throw new Error(error.message);
+    // If email confirmation is enabled, there is no session yet.
+    if (!data.session) return { needsEmailConfirmation: true };
+    profileApi.sync({ fullName, company }).catch(() => undefined);
+    return { needsEmailConfirmation: false };
   };
 
-  const logout = () => {
-    tokenStore.clear();
+  const logout: AuthContextValue['logout'] = async () => {
+    await supabase.auth.signOut();
     setUser(null);
   };
 

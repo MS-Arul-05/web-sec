@@ -1,22 +1,9 @@
 import axios, { type AxiosError } from 'axios';
-import type {
-  User,
-  ScanRecord,
-  ScanSummary,
-  PlatformStats,
-} from '@/types';
-
-const TOKEN_KEY = 'secure-web:token';
-
-export const tokenStore = {
-  get: () => localStorage.getItem(TOKEN_KEY),
-  set: (t: string) => localStorage.setItem(TOKEN_KEY, t),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
-};
+import { supabase } from '@/lib/supabase';
+import type { User, ScanRecord, ScanSummary, PlatformStats } from '@/types';
 
 // In dev, Vite proxies /api -> backend (:4000). In production on Vercel, the
-// backend service is mounted under /_/backend (see root vercel.json), so API
-// calls go to /_/backend/api. Override with VITE_API_URL if needed.
+// backend service is mounted under /_/backend (see root vercel.json).
 const API_BASE =
   import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '/_/backend/api' : '/api');
 
@@ -25,14 +12,14 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach JWT to every request.
-api.interceptors.request.use((config) => {
-  const token = tokenStore.get();
+// Attach the current Supabase access token to every request.
+api.interceptors.request.use(async (config) => {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Normalize backend error messages.
 export function apiErrorMessage(err: unknown): string {
   const e = err as AxiosError<{ error?: string; details?: { field: string; message: string }[] }>;
   if (e.response?.data?.details?.length) {
@@ -41,17 +28,10 @@ export function apiErrorMessage(err: unknown): string {
   return e.response?.data?.error ?? e.message ?? 'Something went wrong';
 }
 
-// ---- Auth ----
-export interface AuthResponse {
-  user: User;
-  token: string;
-}
-
-export const authApi = {
-  register: (data: { fullName: string; email: string; password: string; company?: string }) =>
-    api.post<AuthResponse>('/auth/register', data).then((r) => r.data),
-  login: (data: { email: string; password: string; rememberMe?: boolean }) =>
-    api.post<AuthResponse>('/auth/login', data).then((r) => r.data),
+// ---- Profile (syncs the local DB row for the Supabase user) ----
+export const profileApi = {
+  sync: (profile?: { fullName?: string; company?: string }) =>
+    api.post<{ user: User }>('/auth/me', { profile }).then((r) => r.data.user),
   me: () => api.get<{ user: User }>('/auth/me').then((r) => r.data.user),
 };
 
@@ -70,10 +50,7 @@ export const statsApi = {
   get: () => api.get<PlatformStats>('/stats').then((r) => r.data),
 };
 
-/**
- * Downloads an authenticated file (PDF/JSON) by fetching with the JWT and
- * triggering a browser download from the resulting blob.
- */
+/** Downloads an authenticated file (PDF/JSON) via the JWT-bearing axios client. */
 export async function downloadAuthed(url: string, filename: string): Promise<void> {
   const res = await api.get(url.replace('/api', ''), { responseType: 'blob' });
   const blobUrl = window.URL.createObjectURL(res.data as Blob);

@@ -2,18 +2,13 @@ import type { Request, Response } from 'express';
 import * as authService from './auth.service';
 import { AppError } from '../../utils/AppError';
 
-export async function register(req: Request, res: Response): Promise<void> {
-  const result = await authService.register(req.body);
-  res.status(201).json(result);
-}
-
-export async function login(req: Request, res: Response): Promise<void> {
-  const result = await authService.login(req.body);
-  res.json(result);
-}
-
+/**
+ * Syncs and returns the local profile for the authenticated Supabase user.
+ * The frontend calls this after login so a local User row always exists.
+ */
 export async function me(req: Request, res: Response): Promise<void> {
   if (!req.user) throw AppError.unauthorized();
-  const user = await authService.getMe(req.user.sub);
+  const profile = req.body?.profile as { fullName?: string; company?: string } | undefined;
+  const user = await authService.ensureUser(req.user, profile);
   res.json({ user });
 }

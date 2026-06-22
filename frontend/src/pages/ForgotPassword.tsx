@@ -3,14 +3,18 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { Logo } from '@/components/Logo';
+import { supabase } from '@/lib/supabase';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    // Password-reset email delivery is wired up with the mail service in a later milestone.
+    // Supabase sends the reset email (Authentication → Email templates).
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login`,
+    });
     setSent(true);
   };
 

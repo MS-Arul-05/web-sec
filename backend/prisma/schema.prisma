@@ -9,15 +9,15 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id            String         @id @default(cuid())
+  // id is the Supabase auth user id (auth.users.id / JWT `sub`).
+  id            String         @id
   email         String         @unique
-  passwordHash  String
-  fullName      String
+  fullName      String         @default("")
   company       String?
   role          String         @default("user") // "user" | "admin"
   emailVerified Boolean        @default(false)

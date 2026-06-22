@@ -1,6 +1,8 @@
 import { prisma } from '../../db/prisma';
 import { runWebsiteScan } from '../../engine/scanner';
+import { ensureUser } from '../auth/auth.service';
 import { AppError } from '../../utils/AppError';
+import type { SupabaseUser } from '../../utils/supabaseAuth';
 import type { ScanResult } from '../../engine/types';
 
 export interface ScanRecord {
@@ -39,7 +41,10 @@ function parseRecord(row: {
   };
 }
 
-export async function createScan(userId: string, url: string): Promise<ScanRecord> {
+export async function createScan(identity: SupabaseUser, url: string): Promise<ScanRecord> {
+  // Make sure a local User row exists for the FK before inserting the scan.
+  await ensureUser(identity);
+  const userId = identity.sub;
   const result = await runWebsiteScan(url);
   const row = await prisma.scan.create({
     data: {
