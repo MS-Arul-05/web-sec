@@ -27,4 +27,7 @@ export const env = {
   supabaseSecretKey: process.env.SUPABASE_SECRET_KEY ?? '',
   scanTimeoutMs: Number(process.env.SCAN_TIMEOUT_MS ?? 8000),
   googleSafeBrowsingKey: process.env.GOOGLE_SAFE_BROWSING_KEY ?? '',
+  // Gemini AI threat analysis
+  geminiApiKey: process.env.GEMINI_API_KEY ?? '',
+  geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
 };

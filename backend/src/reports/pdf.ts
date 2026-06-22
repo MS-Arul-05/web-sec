@@ -106,6 +106,13 @@ export function generateScanPdf(result: ScanResult): PDFKit.PDFDocument {
     }
   }
 
+  if (result.aiThreats.length > 0) {
+    section('AI Threat Analysis (Gemini)');
+    for (const t of result.aiThreats) {
+      row(`${t.name} [${t.severity}]`, `${t.type} — ${t.description}`);
+    }
+  }
+
   section('Risk Breakdown');
   for (const item of result.riskBreakdown) {
     row(item.label, `${item.points > 0 ? '+' : ''}${item.points} — ${item.note}`);

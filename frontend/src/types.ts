@@ -23,6 +23,14 @@ export interface PortInfo {
   risky: boolean;
 }
 
+export interface ThreatFinding {
+  name: string;
+  type: string;
+  severity: string; // Critical | High | Medium | Low | Info
+  description: string;
+  recommendation?: string;
+}
+
 export interface SecurityHeader {
   name: string;
   present: boolean;
@@ -87,6 +95,7 @@ export interface ScanResult {
     listed: boolean;
     sources: string[];
   };
+  aiThreats: ThreatFinding[];
   summary: string;
 }
 

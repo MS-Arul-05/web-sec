@@ -6,6 +6,7 @@ import { scanPorts } from './ports';
 import { analyzeHttp, analyzeSecurityHeaders } from './http';
 import { checkBlacklist } from './blacklist';
 import { computeRisk, buildSummary } from './risk';
+import { analyzeThreats } from '../ai/gemini';
 import { AppError } from '../utils/AppError';
 import type { ScanResult } from './types';
 
@@ -85,8 +86,16 @@ export async function runWebsiteScan(input: string): Promise<ScanResult> {
     securityHeaders,
     ports,
     blacklist,
+    aiThreats: [],
     summary: '',
   };
   result.summary = buildSummary(result);
+
+  // AI threat identification (Gemini). Runs last — needs the full findings.
+  // Never throws; returns [] if disabled/unavailable so the scan still completes.
+  result.aiThreats = await analyzeThreats(result);
+
+  // Reflect the AI duration in the total.
+  result.durationMs = Date.now() - started;
   return result;
 }

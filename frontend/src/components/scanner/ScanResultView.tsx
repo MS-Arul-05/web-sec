@@ -4,6 +4,16 @@ import { RiskGauge } from './RiskGauge';
 import { PortChart } from './PortChart';
 import { scansApi, downloadAuthed } from '@/lib/api';
 
+function severityStyle(severity: string): string {
+  switch (severity.toLowerCase()) {
+    case 'critical': return 'bg-red-500/15 text-red-400 border-red-500/30';
+    case 'high': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
+    case 'medium': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+    case 'low': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
+    default: return 'bg-slate-500/15 text-slate-300 border-slate-500/30';
+  }
+}
+
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-cyber-border/50 py-2 last:border-0">
@@ -75,6 +85,36 @@ export function ScanResultView({ record }: { record: ScanRecord }) {
           </div>
         </Card>
       </div>
+
+      {/* AI threat analysis (Gemini) */}
+      {(r.aiThreats?.length ?? 0) > 0 && (
+        <Card title="🤖 AI Threat Analysis">
+          <p className="-mt-2 mb-4 text-xs text-slate-500">
+            {r.aiThreats.length} threat{r.aiThreats.length === 1 ? '' : 's'} identified by Gemini AI
+          </p>
+          <div className="space-y-3">
+            {r.aiThreats.map((threat, i) => (
+              <div key={`${threat.name}-${i}`} className="rounded-xl border border-cyber-border bg-cyber-surface/60 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-white">{threat.name}</span>
+                  <span className="rounded-full border border-cyber-border bg-white/5 px-2 py-0.5 text-xs text-slate-300">
+                    {threat.type}
+                  </span>
+                  <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${severityStyle(threat.severity)}`}>
+                    {threat.severity}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-slate-300">{threat.description}</p>
+                {threat.recommendation && (
+                  <p className="mt-2 text-sm text-cyber-cyan">
+                    <span className="font-semibold">Fix:</span> {threat.recommendation}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Risk breakdown */}
       <Card title="Risk Breakdown">

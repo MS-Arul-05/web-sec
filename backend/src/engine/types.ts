@@ -72,6 +72,17 @@ export interface RiskBreakdownItem {
   note: string;
 }
 
+export type ThreatSeverity = 'Critical' | 'High' | 'Medium' | 'Low' | 'Info';
+
+/** AI-identified threat (from the Gemini analysis layer). */
+export interface ThreatFinding {
+  name: string;
+  type: string;
+  severity: string; // expected: ThreatSeverity (Critical | High | Medium | Low | Info)
+  description: string;
+  recommendation?: string;
+}
+
 export interface ScanResult {
   target: string;
   url: string;
@@ -90,5 +101,6 @@ export interface ScanResult {
   securityHeaders: SecurityHeadersInfo;
   ports: PortInfo[];
   blacklist: BlacklistInfo;
+  aiThreats: ThreatFinding[];
   summary: string;
 }
